@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 from lxml import html
 from urllib import request
+from urllib.parse import urljoin
 
 
-class Ressource(object):
+class Resource(object):
     def __init__(self, doc=None, links=None, attrs=None, uri="", rel="", title=""):
         self._links = links if links is not None else []
         self._doc = doc
@@ -23,11 +24,12 @@ class Ressource(object):
         return "{} at {}>".format(str(self)[:-1], hex(id(self)))
 
     @staticmethod
-    def _extract_links(doc):
+    def _extract_links(base_uri, doc):
         links = {}
         for link in doc.cssselect("a"):
             if "rel" in link.attrib:
-                link_obj = Ressource(uri=link.attrib["href"], rel=link.attrib["rel"], title=link.text)
+                href = link.attrib["href"] if "://" in link.attrib["href"] else urljoin(base_uri, link.attrib["href"])
+                link_obj = Resource(uri=href, rel=link.attrib["rel"], title=link.text)
                 if link.attrib["rel"] in links:
                     links[link.attrib["rel"]].append(link_obj)
                 else:
@@ -56,16 +58,16 @@ class Ressource(object):
         if url:
             html_str = request.urlopen(url).read()
         doc = html.fromstring(html_str)
-        links = Ressource._extract_links(doc)
-        attrs = Ressource._extract_attrs(doc)
-        return Ressource(doc=doc, links=links, uri=url, attrs=attrs)
+        links = Resource._extract_links(url, doc)
+        attrs = Resource._extract_attrs(doc)
+        return Resource(doc=doc, links=links, uri=url, attrs=attrs)
 
     def resolve(self):
         if not self._resolved:
             html_str = request.urlopen(self._uri).read()
             self._doc = html.fromstring(html_str)
-            self._links = Ressource._extract_links(self._doc)
-            attrs = Ressource._extract_attrs(self._doc)
+            self._links = Resource._extract_links(self._uri, self._doc)
+            attrs = Resource._extract_attrs(self._doc)
             self.__dict__.update(attrs)
             self._resolved = True
         return self
