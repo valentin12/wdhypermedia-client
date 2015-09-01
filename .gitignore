@@ -19,3 +19,4 @@ mis.pyhasse.server.egg-info
 *.out
 .idea
 .tox
+.pytest.restart
