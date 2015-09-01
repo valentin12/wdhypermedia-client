@@ -44,22 +44,48 @@ class Resource(object):
     @staticmethod
     def parse(client, url="", html_str=""):
         if url:
-            html_str = request.urlopen(url).read()
+            try:
+                return client.get_resource(url, fetch=True)
+            except KeyError:
+                html_str = request.urlopen(url).read()
         doc = html.fromstring(html_str)
         uri = extract_doc_link(doc, url, url)
-        links = extract_links(client, url, doc)
-        props = extract_props(doc, uri)
-        return Resource(client, doc=doc, links=links, uri=uri, props=props)
+        try:
+            return client.get_resource(uri, fetch=True)
+        except KeyError:
+            links = extract_links(client, url, doc)
+            props = extract_props(doc, uri)
+            res = Resource(client, doc=doc, links=links, uri=uri, props=props)
+            client.add_resource(res)
+            return res
 
     @staticmethod
     def parse_embed(client, element, uri="", rel="", title=""):
         uri = get_uri(element.cssselect("a[rel='self']")[0].attrib['href'], uri)
-        links = extract_links(client, uri, element)
-        props = extract_props(element, uri)
-        return Resource(client, embed_doc=element, links=links, uri=uri, rel=rel, title=title, props=props)
+        try:
+            client.get_resource(uri, fetch=True)
+        except KeyError:
+            links = extract_links(client, uri, element)
+            props = extract_props(element, uri)
+            res = Resource(client, embed_doc=element,
+                           links=links, uri=uri, rel=rel, title=title, props=props)
+            client.add_resource(res)
+            return res
 
-    def fetch(self):
-        if not self._resolved:
+    @staticmethod
+    def link(client, uri="", rel="", title=""):
+        if uri:
+            try:
+                res = client.get_resource(uri)
+                res._title = title
+            except KeyError:
+                pass
+        res = Resource(client, uri=uri, rel=rel, title=title)
+        client.add_resource(res)
+        return res
+
+    def fetch(self, update=False):
+        if not self._resolved or update:
             html_str = request.urlopen(self._uri).read()
             self._doc = html.fromstring(html_str)
             self._links = extract_links(self._client, self._uri, self._doc)
@@ -67,6 +93,9 @@ class Resource(object):
             self.props.update(props)
             self._resolved = True
         return self
+
+    def update(self):
+        self.fetch(update=True)
 
     def traverse(self, rels):
         if not self._resolved:
@@ -182,14 +211,11 @@ def extract_links(client, base_uri, doc):
                     break
                 article = article.getnext()
             if article is not None:
-                link_obj = client.get_resource(href, default=Resource.parse_embed(client,
-                                                                                  article,
-                                                                                  uri=href,
-                                                                                  rel=link.attrib["rel"],
-                                                                                  title=link.text))
+                link_obj = Resource.parse_embed(client, article, uri=href,
+                                                rel=link.attrib["rel"], title=link.text)
             else:
-                link_obj = client.get_resource(href, default=Resource(client, uri=href, rel=link.attrib["rel"],
-                                                                      title=link.text))
+                link_obj = Resource.link(client, uri=href, rel=link.attrib["rel"],
+                                         title=link.text)
             if link.attrib["rel"] in links:
                 links[link.attrib["rel"]].append(link_obj)
             else:
@@ -280,17 +306,15 @@ class Client(object):
     def traverse(self, rels):
         return self._root.traverse(rels)
 
-    def get_resource(self, uri, default=None, fetch=False):
+    def get_resource(self, uri, fetch=False):
         if uri in self._resources:
             if fetch:
                 self._resources[uri].fetch()
             return self._resources[uri]
-        if default is None:
-            raise KeyError("Resource not found and no default provided: {}".format(uri))
-        self._resources_list.append(default)
-        if fetch:
-            default.fetch()
-        return default
+        raise KeyError(uri)
+
+    def add_resource(self, res):
+        self._resources_list.append(res)
 
     @staticmethod
     def from_url(url):
