@@ -8,7 +8,11 @@ import datetime
 
 class Resource(object):
 
-    def __init__(self, doc=None, links=None, props=None, uri="", rel="", title="", embed_doc=None):
+    def __init__(self, client, doc=None, links=None, props=None, uri="", rel="", title="", embed_doc=None):
+        if client:
+            self._client = client
+        else:
+            self._client = Client.from_resource(self)
         self._links = links if links is not None else []
         self._resolved = False
         if doc is not None:
@@ -42,7 +46,7 @@ class Resource(object):
         return uri if "://" in uri else urljoin(base_uri, uri)
 
     @staticmethod
-    def _extract_links(base_uri, doc):
+    def _extract_links(client, base_uri, doc):
         links = {}
         for link in doc.cssselect("a"):
             if "rel" in link.attrib and link.attrib["rel"] != "self":
@@ -54,9 +58,14 @@ class Resource(object):
                         break
                     article = article.getnext()
                 if article is not None:
-                    link_obj = Resource.parse_embed(article, uri=href, rel=link.attrib["rel"], title=link.text)
+                    link_obj = client.get_resource(href, default=Resource.parse_embed(client,
+                                                                                      article,
+                                                                                      uri=href,
+                                                                                      rel=link.attrib["rel"],
+                                                                                      title=link.text))
                 else:
-                    link_obj = Resource(uri=href, rel=link.attrib["rel"], title=link.text)
+                    link_obj = client.get_resource(href, default=Resource(client, uri=href, rel=link.attrib["rel"],
+                                                                          title=link.text))
                 if link.attrib["rel"] in links:
                     links[link.attrib["rel"]].append(link_obj)
                 else:
@@ -160,27 +169,27 @@ class Resource(object):
         return embeds
 
     @staticmethod
-    def parse(url="", html_str=""):
+    def parse(client, url="", html_str=""):
         if url:
             html_str = request.urlopen(url).read()
         doc = html.fromstring(html_str)
         uri = Resource._extract_doc_link(doc, url, url)
-        links = Resource._extract_links(url, doc)
+        links = Resource._extract_links(client, url, doc)
         props = Resource._extract_props(doc, uri)
-        return Resource(doc=doc, links=links, uri=uri, props=props)
+        return Resource(client, doc=doc, links=links, uri=uri, props=props)
 
     @staticmethod
-    def parse_embed(element, uri="", rel="", title=""):
+    def parse_embed(client, element, uri="", rel="", title=""):
         uri = Resource._get_uri(element.cssselect("a[rel='self']")[0].attrib['href'], uri)
-        links = Resource._extract_links(uri, element)
+        links = Resource._extract_links(client, uri, element)
         props = Resource._extract_props(element, uri)
-        return Resource(embed_doc=element, links=links, uri=uri, rel=rel, title=title, props=props)
+        return Resource(client, embed_doc=element, links=links, uri=uri, rel=rel, title=title, props=props)
 
     def fetch(self):
         if not self._resolved:
             html_str = request.urlopen(self._uri).read()
             self._doc = html.fromstring(html_str)
-            self._links = Resource._extract_links(self._uri, self._doc)
+            self._links = Resource._extract_links(self._client, self._uri, self._doc)
             props = Resource._extract_props(self._doc, self._uri)
             self.props.update(props)
             self._resolved = True
@@ -221,3 +230,47 @@ class Link(object):
         self.uri = uri
         self.caption = caption
         self.rel = rel
+
+
+class Client(object):
+    def __init__(self, root_url="", root_html_str="", root=None):
+        self._root = root
+        self._resources_list = []
+        if root is None and (root_url or root_html_str):
+            self._root = Resource.parse(self, url=root_url, html_str=root_html_str)
+        if self._root is not None:
+            self._resources_list.append(self._root)
+
+    @property
+    def _resources(self):
+        res_dict = {}
+        for res in self._resources_list:
+            res_dict[res._uri] = res
+        return res_dict
+
+    def traverse(self, rels):
+        return self._root.traverse(rels)
+
+    def get_resource(self, uri, default=None, fetch=False):
+        if uri in self._resources:
+            if fetch:
+                self._resources[uri].fetch()
+            return self._resources[uri]
+        if default is None:
+            raise KeyError("Resource not found and no default provided: {}".format(uri))
+        self._resources_list.append(default)
+        if fetch:
+            default.fetch()
+        return default
+
+    @staticmethod
+    def from_url(url):
+        return Client(root_url=url)
+
+    @staticmethod
+    def from_html(html_str):
+        return Client(root_html_str=html_str)
+
+    @staticmethod
+    def from_resource(resource):
+        return Client(root=resource)

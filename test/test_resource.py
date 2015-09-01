@@ -1,4 +1,4 @@
-from wdhypermedia import Resource, ResourceList
+from wdhypermedia import Resource, ResourceList, Client
 from os.path import join, dirname
 
 
@@ -6,7 +6,8 @@ ARTICLES_REL = 'http://rels.example.org/articles'
 AUTHORS_REL = 'http://rels.example.org/authors'
 
 test_filepath = join("file://"+dirname(__file__), "html/index.html")
-res = Resource.parse(test_filepath)
+cl = Client()
+res = Resource.parse(cl, test_filepath)
 articles = res.traverse([ARTICLES_REL])
 
 
