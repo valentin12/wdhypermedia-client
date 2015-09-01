@@ -7,19 +7,16 @@ import datetime
 
 
 class Resource(object):
-    RESOLVED_NONE = 0
-    RESOLVED_EMBED = 1
-    RESOLVED_FETCHED = 2
 
     def __init__(self, doc=None, links=None, props=None, uri="", rel="", title="", embed_doc=None):
         self._links = links if links is not None else []
-        self._resolved = Resource.RESOLVED_NONE
+        self._resolved = False
         if doc is not None:
             self._doc = doc
-            self._resolved = Resource.RESOLVED_FETCHED
+            self._resolved = True
         elif embed_doc is not None:
             self._doc = embed_doc
-            self._resolved = Resource.RESOLVED_EMBED
+            self._resolved = False
         self._uri = uri
         self._rel = rel
         self._title = title
@@ -34,7 +31,7 @@ class Resource(object):
         return "{} at {}>".format(str(self)[:-1], hex(id(self)))
 
     def _missing_property_handler(self, props, key):
-        if self._resolved != Resource.RESOLVED_FETCHED:
+        if not self._resolved:
             self.fetch()
         if key in props:
             return props[key]
@@ -180,17 +177,17 @@ class Resource(object):
         return Resource(embed_doc=element, links=links, uri=uri, rel=rel, title=title, props=props)
 
     def fetch(self):
-        if self._resolved != Resource.RESOLVED_FETCHED:
+        if not self._resolved:
             html_str = request.urlopen(self._uri).read()
             self._doc = html.fromstring(html_str)
             self._links = Resource._extract_links(self._uri, self._doc)
             props = Resource._extract_props(self._doc, self._uri)
             self.props.update(props)
-            self._resolved = Resource.RESOLVED_FETCHED
+            self._resolved = True
         return self
 
     def traverse(self, rels):
-        if self._resolved != Resource.RESOLVED_FETCHED:
+        if not self._resolved:
             self.fetch()
         if rels[0] in self._links:
             if len(rels) > 1:
