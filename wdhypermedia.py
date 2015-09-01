@@ -42,155 +42,28 @@ class Resource(object):
         raise KeyError("'{}'".format(key))
 
     @staticmethod
-    def _get_uri(uri, base_uri):
-        return uri if "://" in uri else urljoin(base_uri, uri)
-
-    @staticmethod
-    def _extract_links(client, base_uri, doc):
-        links = {}
-        for link in doc.cssselect("a"):
-            if "rel" in link.attrib and link.attrib["rel"] != "self":
-                href = Resource._get_uri(link.attrib['href'], base_uri)
-                # find an <article> that belongs to the link
-                article = link.getnext()
-                while article is not None:
-                    if article.tag == 'article':
-                        break
-                    article = article.getnext()
-                if article is not None:
-                    link_obj = client.get_resource(href, default=Resource.parse_embed(client,
-                                                                                      article,
-                                                                                      uri=href,
-                                                                                      rel=link.attrib["rel"],
-                                                                                      title=link.text))
-                else:
-                    link_obj = client.get_resource(href, default=Resource(client, uri=href, rel=link.attrib["rel"],
-                                                                          title=link.text))
-                if link.attrib["rel"] in links:
-                    links[link.attrib["rel"]].append(link_obj)
-                else:
-                    links[link.attrib["rel"]] = ResourceList([link_obj])
-        return links
-
-    @staticmethod
-    def _extract_props(doc, self_uri):
-        props = {}
-        data_lists_raw = Resource._strip_doc_for_data(doc, self_uri).cssselect("dl")
-        dl = []
-        for data_list in data_lists_raw:
-            dl.extend(data_list.cssselect("*"))
-        dl = [e for e in dl if e.tag in ['dt', 'dd']]
-        for i in range(len(dl)):
-            if dl[i].tag == 'dt':
-                res = None  # result
-                if "data-type" in dl[i].attrib:
-                    if dl[i].attrib["data-type"] == "boolean":
-                        res = dl[i+1].text.strip().lower() == "true"
-                    elif dl[i].attrib["data-type"] == "number":
-                        res = float(dl[i+1].text.strip())
-                    elif dl[i].attrib["data-type"] == "null":
-                        res = None
-                    elif dl[i].attrib["data-type"] == "string":
-                        if len(dl[i+1]):
-                            # element has children
-                            print("Warning: string data contains HTML elements, use \"\"")
-                            res = ""
-                        else:
-                            res = dl[i+1].text
-                    elif dl[i].attrib["data-type"] == "link":
-                        link_el = dl[i+1].cssselect("a")[0]
-                        link_caption = link_el.text
-                        link_uri = "" if "href" not in link_el.attrib else link_el.attrib["href"]
-                        link_rel = "" if "rel" not in link_el.attrib else link_el.attrib["rel"]
-                        res = Link(caption=link_caption, uri=link_uri, rel=link_rel)
-                    elif dl[i].attrib["data-type"] == "timestamp":
-                        time_el = dl[i+1].cssselect("time")[0]
-                        res = datetime.datetime.strptime(time_el.attrib["datetime"], "%Y-%m-%d")
-                    else:
-                        print("Invalid data type: {}".format(dl[i].attrib["data-type"]))
-                else:
-                    res = Resource._get_prop(dl[i+1])
-                props[dl[i].text] = res
-        return props
-
-    @staticmethod
-    def _get_prop(dd_e):
-        if len(dd_e):
-            # element has children
-            lists = dd_e.cssselect("ul,ol")
-            if len(lists):
-                res_list = []
-                list_el = lists[0]
-                entries = list_el.cssselect("li")
-                for entry in entries:
-                    res_list.append(Resource._get_prop(entry))
-                return res_list
-            links = dd_e.cssselect("a")
-            if len(links):
-                link_el = links[0]
-                link_caption = link_el.text.strip()
-                link_uri = "" if "href" not in link_el.attrib else link_el.attrib["href"].strip()
-                link_rel = "" if "rel" not in link_el.attrib else link_el.attrib["rel"].strip()
-                return Link(caption=link_caption, uri=link_uri, rel=link_rel)
-            times = dd_e.cssselect("time")
-            if len(times):
-                time_el = times[0]
-                return datetime.datetime.strptime(time_el.attrib["datetime"].strip(), "%Y-%m-%d")
-        return dd_e.text.strip()
-
-    @staticmethod
-    def _extract_doc_link(doc, default, base_uri):
-        try:
-            head_link = doc.cssselect("head link")[0]
-            return Resource._get_uri(head_link.attrib["href"], base_uri)
-        except IndexError:
-            return default
-
-    @staticmethod
-    def _strip_doc_for_data(doc, self_uri):
-        # copy document -> not affecting original
-        strip_doc = doc.__copy__()
-
-        # find all embeds (indicated by rel='self') and get their roots (<article>)
-        embeds = Resource._get_embeds(strip_doc, self_uri)
-        for e in embeds.values():
-            # remove from document
-            e.getparent().remove(e)
-        return strip_doc
-
-    @staticmethod
-    def _get_embeds(doc, self_uri):
-        embeds = {Resource._get_uri(e.attrib['href'], self_uri): e
-                  for e in doc.cssselect("a[rel='self']")
-                  if Resource._get_uri(e.attrib['href'], self_uri) != self_uri}
-        for key in embeds.keys():
-            while embeds[key].tag != 'article':
-                embeds[key] = embeds[key].getparent()
-        return embeds
-
-    @staticmethod
     def parse(client, url="", html_str=""):
         if url:
             html_str = request.urlopen(url).read()
         doc = html.fromstring(html_str)
-        uri = Resource._extract_doc_link(doc, url, url)
-        links = Resource._extract_links(client, url, doc)
-        props = Resource._extract_props(doc, uri)
+        uri = extract_doc_link(doc, url, url)
+        links = extract_links(client, url, doc)
+        props = extract_props(doc, uri)
         return Resource(client, doc=doc, links=links, uri=uri, props=props)
 
     @staticmethod
     def parse_embed(client, element, uri="", rel="", title=""):
-        uri = Resource._get_uri(element.cssselect("a[rel='self']")[0].attrib['href'], uri)
-        links = Resource._extract_links(client, uri, element)
-        props = Resource._extract_props(element, uri)
+        uri = get_uri(element.cssselect("a[rel='self']")[0].attrib['href'], uri)
+        links = extract_links(client, uri, element)
+        props = extract_props(element, uri)
         return Resource(client, embed_doc=element, links=links, uri=uri, rel=rel, title=title, props=props)
 
     def fetch(self):
         if not self._resolved:
             html_str = request.urlopen(self._uri).read()
             self._doc = html.fromstring(html_str)
-            self._links = Resource._extract_links(self._client, self._uri, self._doc)
-            props = Resource._extract_props(self._doc, self._uri)
+            self._links = extract_links(self._client, self._uri, self._doc)
+            props = extract_props(self._doc, self._uri)
             self.props.update(props)
             self._resolved = True
         return self
@@ -203,6 +76,162 @@ class Resource(object):
                 return self._links[rels[0]].traverse(rels[1:])
             return self._links[rels[0]]
         return ResourceList()
+
+
+def get_uri(uri, base_uri):
+    return uri if "://" in uri else urljoin(base_uri, uri)
+
+
+def extract_props(doc, self_uri):
+    """
+    Extract properties for the current document.
+    Means: Every <dl> which isn't embedded in another resource
+
+    :param doc: Current document/element
+    :param self_uri: uri of the resource
+    :return: A dictionary of the parsed properties (key: <dt>, value:<dd>)
+    """
+    props = {}
+    data_lists_raw = strip_doc_for_data(doc, self_uri).cssselect("dl")
+    dl = []
+    for data_list in data_lists_raw:
+        dl.extend(data_list.cssselect("*"))
+    dl = [e for e in dl if e.tag in ['dt', 'dd']]
+    for i in range(len(dl)):
+        if dl[i].tag == 'dt':
+            res = None  # result
+            if "data-type" in dl[i].attrib:
+                if dl[i].attrib["data-type"] == "boolean":
+                    res = dl[i+1].text.strip().lower() == "true"
+                elif dl[i].attrib["data-type"] == "number":
+                    res = float(dl[i+1].text.strip())
+                elif dl[i].attrib["data-type"] == "null":
+                    res = None
+                elif dl[i].attrib["data-type"] == "string":
+                    if len(dl[i+1]):
+                        # element has children
+                        print("Warning: string data contains HTML elements, use \"\"")
+                        res = ""
+                    else:
+                        res = dl[i+1].text
+                elif dl[i].attrib["data-type"] == "link":
+                    link_el = dl[i+1].cssselect("a")[0]
+                    link_caption = link_el.text
+                    link_uri = "" if "href" not in link_el.attrib else link_el.attrib["href"]
+                    link_rel = "" if "rel" not in link_el.attrib else link_el.attrib["rel"]
+                    res = Link(caption=link_caption, uri=link_uri, rel=link_rel)
+                elif dl[i].attrib["data-type"] == "timestamp":
+                    time_el = dl[i+1].cssselect("time")[0]
+                    res = datetime.datetime.strptime(time_el.attrib["datetime"], "%Y-%m-%d")
+                else:
+                    print("Invalid data type: {}".format(dl[i].attrib["data-type"]))
+            else:
+                res = get_prop(dl[i+1])
+            props[dl[i].text] = res
+    return props
+
+
+def get_prop(dd_element):
+    """
+    Extract property from one element when data-type is unknown
+
+    :param dd_element: The element to extract from
+    :return: content of the element
+    """
+    if len(dd_element):
+        # element has children
+        lists = dd_element.cssselect("ul,ol")
+        if len(lists):
+            res_list = []
+            list_el = lists[0]
+            entries = list_el.cssselect("li")
+            for entry in entries:
+                res_list.append(get_prop(entry))
+            return res_list
+        links = dd_element.cssselect("a")
+        if len(links):
+            link_el = links[0]
+            link_caption = link_el.text.strip()
+            link_uri = "" if "href" not in link_el.attrib else link_el.attrib["href"].strip()
+            link_rel = "" if "rel" not in link_el.attrib else link_el.attrib["rel"].strip()
+            return Link(caption=link_caption, uri=link_uri, rel=link_rel)
+        times = dd_element.cssselect("time")
+        if len(times):
+            time_el = times[0]
+            return datetime.datetime.strptime(time_el.attrib["datetime"].strip(), "%Y-%m-%d")
+    return dd_element.text.strip()
+
+
+def extract_links(client, base_uri, doc):
+    """
+    Extract all links of a document as Resources
+
+    :param client: current client
+    :param base_uri: bas uri of the document
+    :param doc: document to extract from
+    :return: dict of Resources (key: rel)
+    """
+    links = {}
+    for link in doc.cssselect("a"):
+        if "rel" in link.attrib and link.attrib["rel"] != "self":
+            href = get_uri(link.attrib['href'], base_uri)
+            # find an <article> that belongs to the link
+            article = link.getnext()
+            while article is not None:
+                if article.tag == 'article':
+                    break
+                article = article.getnext()
+            if article is not None:
+                link_obj = client.get_resource(href, default=Resource.parse_embed(client,
+                                                                                  article,
+                                                                                  uri=href,
+                                                                                  rel=link.attrib["rel"],
+                                                                                  title=link.text))
+            else:
+                link_obj = client.get_resource(href, default=Resource(client, uri=href, rel=link.attrib["rel"],
+                                                                      title=link.text))
+            if link.attrib["rel"] in links:
+                links[link.attrib["rel"]].append(link_obj)
+            else:
+                links[link.attrib["rel"]] = ResourceList([link_obj])
+    return links
+
+
+def strip_doc_for_data(doc, self_uri):
+    # copy document -> not affecting original
+    strip_doc = doc.__copy__()
+
+    # find all embeds (indicated by rel='self') and get their roots (<article>)
+    embeds = extract_embeds(strip_doc, self_uri)
+    for e in embeds.values():
+        # remove from document
+        e.getparent().remove(e)
+    return strip_doc
+
+
+def extract_doc_link(doc, default, base_uri):
+    try:
+        head_link = doc.cssselect("head link")[0]
+        return get_uri(head_link.attrib["href"], base_uri)
+    except IndexError:
+        return default
+
+
+def extract_embeds(doc, self_uri):
+    """
+    Return the Elements of all embedded resource
+
+    :param doc: document to extract from
+    :param self_uri: uri of the document
+    :return: dict of Elements (Key: uri)
+    """
+    embeds = {get_uri(e.attrib['href'], self_uri): e
+              for e in doc.cssselect("a[rel='self']")
+              if get_uri(e.attrib['href'], self_uri) != self_uri}
+    for key in embeds.keys():
+        while embeds[key].tag != 'article':
+            embeds[key] = embeds[key].getparent()
+    return embeds
 
 
 class ResourceList(list):
