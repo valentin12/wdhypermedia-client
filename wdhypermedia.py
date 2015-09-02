@@ -128,34 +128,39 @@ def extract_props(doc, self_uri):
     dl = [e for e in dl if e.tag in ['dt', 'dd']]
     for i in range(len(dl)):
         if dl[i].tag == 'dt':
-            res = None  # result
+            dd_count = 0
+            while len(dl) > i + dd_count + 1 and dl[i+dd_count+1].tag == 'dd':
+                dd_count += 1
+            res = []  # result
             if "data-type" in dl[i].attrib:
-                if dl[i].attrib["data-type"] == "boolean":
-                    res = dl[i+1].text.strip().lower() == "true"
-                elif dl[i].attrib["data-type"] == "number":
-                    res = float(dl[i+1].text.strip())
-                elif dl[i].attrib["data-type"] == "null":
-                    res = None
-                elif dl[i].attrib["data-type"] == "string":
-                    if len(dl[i+1]):
-                        # element has children
-                        print("Warning: string data contains HTML elements, use \"\"")
-                        res = ""
+                for dd_num in range(dd_count):
+                    if dl[i].attrib["data-type"] == "boolean":
+                        res.append(dl[i+dd_num+1].text.strip().lower() == "true")
+                    elif dl[i].attrib["data-type"] == "number":
+                        res.append(float(dl[i+dd_num+1].text.strip()))
+                    elif dl[i].attrib["data-type"] == "null":
+                        res.append(None)
+                    elif dl[i].attrib["data-type"] == "string":
+                        if len(dl[i+dd_num+1]):
+                            # element has children
+                            print("Warning: string data contains HTML elements, use \"\"")
+                            res.append("")
+                        else:
+                            res.append(dl[i+1].text)
+                    elif dl[i].attrib["data-type"] == "link":
+                        link_el = dl[i+1].cssselect("a")[0]
+                        link_caption = link_el.text
+                        link_uri = "" if "href" not in link_el.attrib else link_el.attrib["href"]
+                        link_rel = "" if "rel" not in link_el.attrib else link_el.attrib["rel"]
+                        res.append(Link(caption=link_caption, uri=link_uri, rel=link_rel))
+                    elif dl[i].attrib["data-type"] == "timestamp":
+                        time_el = dl[i+1].cssselect("time")[0]
+                        res.append(datetime.datetime.strptime(time_el.attrib["datetime"], "%Y-%m-%d"))
                     else:
-                        res = dl[i+1].text
-                elif dl[i].attrib["data-type"] == "link":
-                    link_el = dl[i+1].cssselect("a")[0]
-                    link_caption = link_el.text
-                    link_uri = "" if "href" not in link_el.attrib else link_el.attrib["href"]
-                    link_rel = "" if "rel" not in link_el.attrib else link_el.attrib["rel"]
-                    res = Link(caption=link_caption, uri=link_uri, rel=link_rel)
-                elif dl[i].attrib["data-type"] == "timestamp":
-                    time_el = dl[i+1].cssselect("time")[0]
-                    res = datetime.datetime.strptime(time_el.attrib["datetime"], "%Y-%m-%d")
-                else:
-                    print("Invalid data type: {}".format(dl[i].attrib["data-type"]))
+                        print("Invalid data type: {}".format(dl[i].attrib["data-type"]))
             else:
-                res = get_prop(dl[i+1])
+                for dd_num in range(dd_count):
+                    res.append(get_prop(dl[i+1]))
             props[dl[i].text] = res
     return props
 
