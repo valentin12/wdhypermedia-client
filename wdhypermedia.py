@@ -7,6 +7,9 @@ import datetime
 
 
 class Resource(object):
+    """
+    Stores all information belonging to a resource referred to by an URI
+    """
 
     def __init__(self, client, doc=None, links=None, props=None, forms=None, uri="", rel="", title="", embed_doc=None):
         if client:
@@ -22,7 +25,7 @@ class Resource(object):
         elif embed_doc is not None:
             self._doc = embed_doc
             self._resolved = False
-        self._uri = uri
+        self.uri = uri
         self._rel = rel
         self._title = title
         self.props = PropertyList(self._missing_property_handler)
@@ -30,7 +33,7 @@ class Resource(object):
             self.props.update(props)
 
     def __str__(self):
-        return "<{} _uri='{}', _resolved={}>".format(self.__class__.__name__, self._uri, self._resolved)
+        return "<{} _uri='{}', _resolved={}>".format(self.__class__.__name__, self.uri, self._resolved)
 
     def __repr__(self):
         return "{} at {}>".format(str(self)[:-1], hex(id(self)))
@@ -44,24 +47,46 @@ class Resource(object):
 
     @property
     def forms(self):
-        if self._resolved:
-            return self._forms
-        self.fetch()
+        if not self._resolved:
+            self.fetch()
         return self._forms
 
+    @property
+    def links(self):
+        if not self._resolved:
+            self.fetch()
+            return self._links
+
     @staticmethod
-    def parse(client, url="", html_str=""):
-        if url:
-            try:
-                return client.get_resource(url, fetch=True)
-            except KeyError:
-                html_str = request.urlopen(url).read()
-        doc = html.fromstring(html_str)
-        uri = extract_doc_link(doc, url, url)
+    def from_uri(client, uri=""):
+        """
+        Parse an resource located at the uri and turn it into an Resource object
+
+        :param client: Client to which this Resource belongs to
+        :param uri: pointing to the resource
+        :return: The created Resource object
+        """
         try:
             return client.get_resource(uri, fetch=True)
         except KeyError:
-            links = extract_links(client, url, doc)
+            html_str = request.urlopen(uri).read()
+        return Resource.from_html(client, html_str, base_uri=uri)
+
+    @staticmethod
+    def from_html(client, html_str, base_uri=""):
+        """
+        Parse an HTML string and turn it into a Resource object
+
+        :param client: Client to which this Resource belongs to
+        :param html_str: The resource as HTML string
+        :param base_uri: (optional) Base uri to resolve relative URIs
+        """
+        doc = html.fromstring(html_str)
+        uri = extract_doc_link(doc, base_uri, base_uri)
+        try:
+            return client.get_resource(uri, fetch=True)
+        except KeyError:
+            links = extract_links(client, base_uri, doc)
             props = extract_props(doc, uri)
             forms = extract_forms(client, doc, uri)
             res = Resource(client, doc=doc, links=links, uri=uri, props=props, forms=forms)
@@ -69,7 +94,16 @@ class Resource(object):
             return res
 
     @staticmethod
-    def parse_embed(client, element, uri="", rel="", title=""):
+    def _parse_embed(client, element, uri="", rel="", title=""):
+        """
+        Parse an embedded resource
+
+        :param client: Client to which this Resource belongs to
+        :param element: Element containing the embedded resource
+        :param uri: (optional) pointing to the resource
+        :param rel: (optional) relation belonging to the resource
+        :param title: (optional) describing the resource
+        """
         uri = get_uri(element.cssselect("a[rel='self']")[0].attrib['href'], uri)
         try:
             client.get_resource(uri, fetch=True)
@@ -78,12 +112,20 @@ class Resource(object):
             props = extract_props(element, uri)
             forms = extract_forms(client, element, uri)
             res = Resource(client, embed_doc=element,
-                           links=links, uri=uri, rel=rel, title=title, props=props)
+                           links=links, uri=uri, rel=rel, title=title, props=props, forms=forms)
             client.add_resource(res)
             return res
 
     @staticmethod
-    def link(client, uri="", rel="", title=""):
+    def link(client, uri, rel="", title=""):
+        """
+        Create a resource pointing to an uri
+
+        :param client: Client to which this Resource belongs to
+        :param uri: pointing to the resource
+        :param rel: relation belonging to the resource
+        :param title: describing the resource
+        """
         if uri:
             try:
                 res = client.get_resource(uri)
@@ -95,20 +137,37 @@ class Resource(object):
         return res
 
     def fetch(self, update=False):
+        """
+        Fetching and parsing the document of the resource
+
+        :param update: Fetch, even if the resource was already fetched
+        """
         if not self._resolved or update:
-            html_str = request.urlopen(self._uri).read()
+            html_str = request.urlopen(self.uri).read()
             self._doc = html.fromstring(html_str)
-            self._links = extract_links(self._client, self._uri, self._doc)
-            self._forms = extract_forms(self._client, self._doc, self._uri)
-            props = extract_props(self._doc, self._uri)
+            self._links = extract_links(self._client, self.uri, self._doc)
+            self._forms = extract_forms(self._client, self._doc, self.uri)
+            props = extract_props(self._doc, self.uri)
             self.props.update(props)
             self._resolved = True
         return self
 
     def update(self):
+        """
+        Refetch the resource
+
+        equals fetch(update=True)
+        """
         self.fetch(update=True)
 
     def traverse(self, rels):
+        """
+        Get the resources described by a path of relations
+        relative to this resource
+
+        :param rels: List of relations as strings
+        :return: ResourceList of the resources found
+        """
         if not self._resolved:
             self.fetch()
         if rels[0] in self._links:
@@ -227,10 +286,10 @@ def extract_links(client, base_uri, doc):
                     break
                 article = article.getnext()
             if article is not None:
-                link_obj = Resource.parse_embed(client, article, uri=href,
-                                                rel=link.attrib["rel"], title=link.text)
+                link_obj = Resource._parse_embed(client, article, uri=href,
+                                                 rel=link.attrib["rel"], title=link.text)
             else:
-                link_obj = Resource.link(client, uri=href, rel=link.attrib["rel"],
+                link_obj = Resource.link(client, href, rel=link.attrib["rel"],
                                          title=link.text)
             if link.attrib["rel"] in links:
                 links[link.attrib["rel"]].append(link_obj)
@@ -277,7 +336,16 @@ def extract_embeds(doc, self_uri):
 
 
 def extract_forms(client, doc, self_uri):
+    """
+    Return all forms in a document not embedded in another resource
+
+    :param client: current client
+    :param doc: document/element to extract from
+    :param self_uri: URI of the resource to extract from
+    :return: all forms found as Form object
+    """
     doc.make_links_absolute(self_uri)
+    doc = strip_doc_for_data(doc, self_uri)
     forms = {}
     for el in doc.cssselect("form"):
         if 'name' in el.attrib and el.attrib['name']:
@@ -287,6 +355,13 @@ def extract_forms(client, doc, self_uri):
 
 class ResourceList(list):
     def traverse(self, rels):
+        """
+        Find all resources described by a path of relations
+        relative to this elements of this list
+
+        :param rels: List of relations as strings
+        :return: ResourceList of the resources found
+        """
         ret = ResourceList()
         for res in self:
             ret += res.traverse(rels)
@@ -332,6 +407,12 @@ class Form(object):
                     self.params[elt.attrib['name']] = None
 
     def submit(self):
+        """
+        Submit the form by creating a request based on the values stored in
+        self.params
+
+        :return: A resource returned by the server
+        """
         params = urlencode({key: value for key, value in self.params.items() if value is not None})
         if self.method == 'get':
             up = urlparse(self.action)
@@ -341,18 +422,27 @@ class Form(object):
                 allparams = params
             where = urlunparse((up.scheme, up.netloc, up.path,
                                 up.params, allparams, ''))
-            return Resource.parse(client=self._client, url=where)
+            return Resource.from_uri(self._client, where)
         else:
             ret_html = request.urlopen(self.action, params).read()
-            return Resource.parse(client=self._client, html_str=ret_html)
+            return Resource.from_html(self._client, html_str=ret_html)
 
 
 class Client(object):
+    """
+    Represents the root of all resources
+
+    Contains functionality to cache Resource objects by URI, to avoid
+    having multiple Resources pointing to the same URI
+    """
     def __init__(self, root_url="", root_html_str="", root=None):
         self._root = root
         self._resources_list = []
-        if root is None and (root_url or root_html_str):
-            self._root = Resource.parse(self, url=root_url, html_str=root_html_str)
+        if root is None:
+            if root_url:
+                self._root = Resource.from_uri(self, root_url)
+            elif root_html_str:
+                self._root = Resource.from_html(self, html_str=root_html_str)
         if self._root is not None:
             self._resources_list.append(self._root)
 
@@ -360,10 +450,17 @@ class Client(object):
     def _resources(self):
         res_dict = {}
         for res in self._resources_list:
-            res_dict[res._uri] = res
+            res_dict[res.uri] = res
         return res_dict
 
     def traverse(self, rels):
+        """
+        Get the resources described by a path of relations
+        relative to this clients root
+
+        :param rels: List of relations as strings
+        :return: ResourceList of the resources found
+        """
         return self._root.traverse(rels)
 
     def get_resource(self, uri, fetch=False):

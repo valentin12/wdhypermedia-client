@@ -8,12 +8,12 @@ SEARCH_REL = 'http://rels.example.org/search'
 
 test_filepath = join("file://"+dirname(__file__), "html/index.html")
 cl = Client()
-res = Resource.parse(cl, test_filepath)
+res = Resource.from_uri(cl, test_filepath)
 articles = res.traverse([ARTICLES_REL])
 
 
 def test_res():
-    assert res._uri == test_filepath
+    assert res.uri == test_filepath
     assert res._doc is not None
     assert res._resolved == True
 
