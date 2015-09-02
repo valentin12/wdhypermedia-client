@@ -4,6 +4,7 @@ from os.path import join, dirname
 
 ARTICLES_REL = 'http://rels.example.org/articles'
 AUTHORS_REL = 'http://rels.example.org/authors'
+SEARCH_REL = 'http://rels.example.org/search'
 
 test_filepath = join("file://"+dirname(__file__), "html/index.html")
 cl = Client()
@@ -19,8 +20,7 @@ def test_res():
 
 def test_parse():
     assert len(res.props) == 0
-    assert all([l in res._links.keys() for l in [ARTICLES_REL, AUTHORS_REL]])
-    assert len(res._links.keys()) == 2
+    assert all([l in res._links.keys() for l in [ARTICLES_REL, AUTHORS_REL, SEARCH_REL]])
     assert type(res._links['http://rels.example.org/articles'][0]) is Resource
 
 

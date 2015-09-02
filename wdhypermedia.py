@@ -1,19 +1,20 @@
 #!/usr/bin/python3
 from lxml import html
 from urllib import request
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, urlunparse, urlencode
 
 import datetime
 
 
 class Resource(object):
 
-    def __init__(self, client, doc=None, links=None, props=None, uri="", rel="", title="", embed_doc=None):
+    def __init__(self, client, doc=None, links=None, props=None, forms=None, uri="", rel="", title="", embed_doc=None):
         if client:
             self._client = client
         else:
             self._client = Client.from_resource(self)
         self._links = links if links is not None else []
+        self._forms = forms if forms is not None else []
         self._resolved = False
         if doc is not None:
             self._doc = doc
@@ -41,6 +42,13 @@ class Resource(object):
             return props[key]
         raise KeyError("'{}'".format(key))
 
+    @property
+    def forms(self):
+        if self._resolved:
+            return self._forms
+        self.fetch()
+        return self._forms
+
     @staticmethod
     def parse(client, url="", html_str=""):
         if url:
@@ -55,7 +63,8 @@ class Resource(object):
         except KeyError:
             links = extract_links(client, url, doc)
             props = extract_props(doc, uri)
-            res = Resource(client, doc=doc, links=links, uri=uri, props=props)
+            forms = extract_forms(client, doc, uri)
+            res = Resource(client, doc=doc, links=links, uri=uri, props=props, forms=forms)
             client.add_resource(res)
             return res
 
@@ -67,6 +76,7 @@ class Resource(object):
         except KeyError:
             links = extract_links(client, uri, element)
             props = extract_props(element, uri)
+            forms = extract_forms(client, element, uri)
             res = Resource(client, embed_doc=element,
                            links=links, uri=uri, rel=rel, title=title, props=props)
             client.add_resource(res)
@@ -89,6 +99,7 @@ class Resource(object):
             html_str = request.urlopen(self._uri).read()
             self._doc = html.fromstring(html_str)
             self._links = extract_links(self._client, self._uri, self._doc)
+            self._forms = extract_forms(self._client, self._doc, self._uri)
             props = extract_props(self._doc, self._uri)
             self.props.update(props)
             self._resolved = True
@@ -265,6 +276,15 @@ def extract_embeds(doc, self_uri):
     return embeds
 
 
+def extract_forms(client, doc, self_uri):
+    doc.make_links_absolute(self_uri)
+    forms = {}
+    for el in doc.cssselect("form"):
+        if 'name' in el.attrib and el.attrib['name']:
+            forms[el.attrib['name']] = Form(client, el)
+    return forms
+
+
 class ResourceList(list):
     def traverse(self, rels):
         ret = ResourceList()
@@ -290,6 +310,41 @@ class Link(object):
         self.uri = uri
         self.caption = caption
         self.rel = rel
+
+
+class Form(object):
+    def __init__(self, client, element):
+        self._client = client
+        self._doc = element
+        self._parse()
+
+    def _parse(self):
+        self.name = self._doc.attrib['name'] if 'name' in self._doc.attrib else ''
+        self.method = self._doc.attrib['method'].lower() if 'method' in self._doc.attrib else 'get'
+        self.action = self._doc.attrib['action'] if 'action' in self._doc.attrib else ''
+
+        self.params = {}
+        for tp in ['input', 'textarea', 'select']:
+            for elt in self._doc.cssselect(tp):
+                if 'type' in elt.attrib and elt.attrib['type'] == 'hidden':
+                    continue
+                if 'name' in elt.attrib:
+                    self.params[elt.attrib['name']] = None
+
+    def submit(self):
+        params = urlencode({key: value for key, value in self.params.items() if value is not None})
+        if self.method == 'get':
+            up = urlparse(self.action)
+            if up.params:
+                allparams = "%s&%s" % (up.params, params)
+            else:
+                allparams = params
+            where = urlunparse((up.scheme, up.netloc, up.path,
+                                up.params, allparams, ''))
+            return Resource.parse(client=self._client, url=where)
+        else:
+            ret_html = request.urlopen(self.action, params).read()
+            return Resource.parse(client=self._client, html_str=ret_html)
 
 
 class Client(object):
