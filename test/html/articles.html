@@ -3,51 +3,57 @@
 <head>
 	<meta charset="utf-8">
 	<title>articles</title>
+	<link rel="self" href="articles.html">
 </head>
 <body>
 <h1>articles</h1>
 <ul>
 	<li>
-		<a href="#article0" rel="http://vocab.example.org/article"></a>
-		<article id="article0">
-			<h1>
-				<a href="/articles/0" rel="self">
-					Hello World
-				</a>
-			</h1>
-			<dl>
-				<dt>title</dt>
-				<dd>Hello World</dd>
+        <details>
+            <summary>
+                <h1>
+		            <a href="/articles/0" rel="http://rels.example.org/article">
+                        Hello World
+                    </a>
+                </h1>
+            </summary>
+            <article id="article0">
+                <dl>
+                    <dt>title</dt>
+                    <dd>Hello World</dd>
 
-				<dt>pubdate</dt>
-				<dd>
-					<time datetime="2015-08-27">
-						2015-08-27
-					</time>
-				</dd>
-			</dl>
-		</article>
+                    <dt>pubdate</dt>
+                    <dd>
+                        <time datetime="2015-08-27">
+                            2015-08-27
+                        </time>
+                    </dd>
+                </dl>
+            </article>
+        </details>
 	</li>
 	<li>
-		<a href="#article1" rel="http://vocab.example.org/article"></a>
-		<article id="article1">
-			<h1>
-				<a href="/articles/1" rel="self">
-					Lipsum
-				</a>
-			</h1>
-			<dl>
-				<dt>title</dt>
-				<dd>Lipsum</dd>
-				
-				<dt>pubdate</dt>
-				<dd>
-					<time datetime="2038-01-19">
-						2038-01-19
-					</time>
-				</dd>
-			</dl>
-		</article>
+        <details>
+            <summary>
+                <h1>
+		            <a href="/articles/1" rel="http://rels.example.org/article">
+                        Lipsum
+                    </a>
+                </h1>
+            </summary>
+            <article id="article1">
+                <dl>
+                    <dt>title</dt>
+                    <dd>Lipsum</dd>
+                    <dt>pubdate</dt>
+                    <dd>
+                        <time datetime="2038-01-19">
+                            2038-01-19
+                        </time>
+                    </dd>
+                </dl>
+            </article>
+        </details>
 	</li>
 </ul>
 </body>

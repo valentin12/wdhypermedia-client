@@ -94,7 +94,7 @@ class Resource(object):
         :param rel: (optional) relation belonging to the resource
         :param title: (optional) describing the resource
         """
-        uri = get_uri(element.cssselect("a[rel='self']")[0].attrib['href'], uri)
+        uri = get_uri(element.cssselect("summary a".format(rel))[0].attrib['href'], uri)
         try:
             client.get_resource(uri, fetch=True)
         except KeyError:
@@ -265,21 +265,23 @@ def extract_links(client, base_uri, doc):
     :return: dict of Resources (key: rel)
     """
     links = {}
+    # first add the embeds
+    embeds = extract_embeds(doc, base_uri)
+    embed_links = []
+    for href, e in embeds.items():
+        link = e.cssselect("summary a")[0]
+        embed_links.append(link)
+        rel = link.attrib["rel"]
+        title = link.text.strip()
+        link_obj = Resource._parse_embed(client, e, uri=href, rel=rel, title=title)
+        if rel in links:
+            links[rel].append(link_obj)
+        else:
+            links[rel] = ResourceList([link_obj])
     for link in doc.cssselect("a"):
-        if "rel" in link.attrib and link.attrib["rel"] != "self":
-            href = get_uri(link.attrib['href'], base_uri)
-            # find an <article> that belongs to the link
-            article = link.getnext()
-            while article is not None:
-                if article.tag == 'article':
-                    break
-                article = article.getnext()
-            if article is not None:
-                link_obj = Resource._parse_embed(client, article, uri=href,
-                                                 rel=link.attrib["rel"], title=link.text)
-            else:
-                link_obj = Resource.link(client, href, rel=link.attrib["rel"],
-                                         title=link.text)
+        if "rel" in link.attrib and link.attrib["rel"] != "self" and link not in embed_links:
+            link_obj = Resource.link(client, get_uri(link.attrib['href'], base_uri), rel=link.attrib["rel"],
+                                     title=link.text)
             if link.attrib["rel"] in links:
                 links[link.attrib["rel"]].append(link_obj)
             else:
@@ -315,12 +317,19 @@ def extract_embeds(doc, self_uri):
     :param self_uri: uri of the document
     :return: dict of Elements (Key: uri)
     """
-    embeds = {get_uri(e.attrib['href'], self_uri): e
-              for e in doc.cssselect("a[rel='self']")
-              if get_uri(e.attrib['href'], self_uri) != self_uri}
-    for key in embeds.keys():
-        while embeds[key].tag != 'article':
-            embeds[key] = embeds[key].getparent()
+    details = doc.cssselect('details')
+    embeds = {}
+    for d in details:
+        if d == doc:
+            continue
+        s = d.cssselect("summary")
+        if not s:
+            continue
+        link = s[0].cssselect("a")
+        if not link:
+            continue
+        if link[0].attrib['href'] != self_uri:
+            embeds[get_uri(link[0].attrib['href'], self_uri)] = d
     return embeds
 
 
