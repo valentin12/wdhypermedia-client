@@ -16,8 +16,6 @@ class Resource(object):
             self._client = client
         else:
             self._client = Client.from_resource(self)
-        self._links = links if links is not None else []
-        self._forms = forms if forms is not None else []
         self._resolved = False
         if doc is not None:
             self._doc = doc
@@ -28,6 +26,10 @@ class Resource(object):
         self.uri = uri
         self._rel = rel
         self._title = title
+        self._links = links if links is not None else []
+        self.forms = PropertyList(self._missing_property_handler)
+        if forms is not None:
+            self.forms.update(forms)
         self.props = PropertyList(self._missing_property_handler)
         if props is not None:
             self.props.update(props)
@@ -44,18 +46,6 @@ class Resource(object):
         if key in props:
             return props[key]
         raise KeyError("'{}'".format(key))
-
-    @property
-    def forms(self):
-        if not self._resolved:
-            self.fetch()
-        return self._forms
-
-    @property
-    def links(self):
-        if not self._resolved:
-            self.fetch()
-            return self._links
 
     @staticmethod
     def from_uri(client, uri=""):
@@ -146,9 +136,8 @@ class Resource(object):
             html_str = request.urlopen(self.uri).read()
             self._doc = html.fromstring(html_str)
             self._links = extract_links(self._client, self.uri, self._doc)
-            self._forms = extract_forms(self._client, self._doc, self.uri)
-            props = extract_props(self._doc, self.uri)
-            self.props.update(props)
+            self.forms.update(extract_forms(self._client, self._doc, self.uri))
+            self.props.update(extract_props(self._doc, self.uri))
             self._resolved = True
         return self
 
