@@ -397,12 +397,14 @@ class Form(object):
         self.action = self._doc.attrib['action'] if 'action' in self._doc.attrib else ''
 
         self.params = {}
+        self._hidden = {}
         for tp in ['input', 'textarea', 'select']:
             for elt in self._doc.cssselect(tp):
-                if 'type' in elt.attrib and elt.attrib['type'] == 'hidden':
-                    continue
                 if 'name' in elt.attrib:
-                    self.params[elt.attrib['name']] = None
+                    if 'type' in elt.attrib and elt.attrib['type'] == 'hidden':
+                        self._hidden[elt.attrib['name']] = elt.attrib['value'] if 'value' in elt.attrib else ""
+                    else:
+                        self.params[elt.attrib['name']] = elt.attrib['value'] if 'value' in elt.attrib else ""
 
     def submit(self):
         """
@@ -411,7 +413,9 @@ class Form(object):
 
         :return: A resource returned by the server
         """
-        params = urlencode({key: value for key, value in self.params.items() if value is not None})
+        params_dict = self._hidden
+        params_dict.update(self.params)
+        params = urlencode({key: value for key, value in params_dict.items() if value is not None})
         if self.method == 'get':
             up = urlparse(self.action)
             if up.params:
