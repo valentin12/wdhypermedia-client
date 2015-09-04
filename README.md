@@ -10,8 +10,9 @@ Example server is https://github.com/FND/wdh
 Paths to resources are described by relations, not by links.
 
     # request a list of all authors by describing a path of relations to them
-    #                          resource with list of all authors,  the author resource itself
-    authors = client.traverse(["http://rels.example.org/authors", "http://rels.example.org/author"])
+    # [resource with list of all authors,  the author resource itself]
+    authors = client.traverse(["http://rels.example.org/authors",
+                               "http://rels.example.org/author"])
     # list the authors
     for author in authors:
         handle = author.props["handle"][0]
