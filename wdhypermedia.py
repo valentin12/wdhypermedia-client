@@ -24,9 +24,9 @@ class Resource(object):
             self._doc = embed_doc
             self._resolved = False
         self.uri = uri
-        self._rel = rel
-        self._title = title
-        self._links = links if links is not None else []
+        self.rel = rel
+        self.title = title
+        self.links = links if links is not None else []
         self.forms = PropertyList(self._missing_property_handler)
         if forms is not None:
             self.forms.update(forms)
@@ -119,7 +119,7 @@ class Resource(object):
         if uri:
             try:
                 res = client.get_resource(uri)
-                res._title = title
+                res.title = title
             except KeyError:
                 pass
         res = Resource(client, uri=uri, rel=rel, title=title)
@@ -135,7 +135,7 @@ class Resource(object):
         if not self._resolved or update:
             html_str = request.urlopen(self.uri).read()
             self._doc = html.fromstring(html_str)
-            self._links = extract_links(self._client, self.uri, self._doc)
+            self.links = extract_links(self._client, self.uri, self._doc)
             self.forms.update(extract_forms(self._client, self._doc, self.uri))
             self.props.update(extract_props(self._doc, self.uri))
             self._resolved = True
@@ -159,10 +159,10 @@ class Resource(object):
         """
         if not self._resolved:
             self.fetch()
-        if rels[0] in self._links:
+        if rels[0] in self.links:
             if len(rels) > 1:
-                return self._links[rels[0]].traverse(rels[1:])
-            return self._links[rels[0]]
+                return self.links[rels[0]].traverse(rels[1:])
+            return self.links[rels[0]]
         return ResourceList()
 
 

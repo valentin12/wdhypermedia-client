@@ -20,8 +20,8 @@ def test_res():
 
 def test_parse():
     assert len(res.props) == 0
-    assert all([l in res._links.keys() for l in [ARTICLES_REL, AUTHORS_REL, SEARCH_REL]])
-    assert type(res._links['http://rels.example.org/articles'][0]) is Resource
+    assert all([l in res.links.keys() for l in [ARTICLES_REL, AUTHORS_REL, SEARCH_REL]])
+    assert type(res.links['http://rels.example.org/articles'][0]) is Resource
 
 
 def test_traverse():
@@ -29,5 +29,5 @@ def test_traverse():
     assert len(articles) == 1
     assert type(articles[0]) is Resource
     assert articles[0]._resolved == False
-    assert articles[0]._rel == ARTICLES_REL
-    assert articles[0]._title == "articles"
+    assert articles[0].rel == ARTICLES_REL
+    assert articles[0].title == "articles"
