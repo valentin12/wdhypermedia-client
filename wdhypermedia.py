@@ -475,6 +475,9 @@ class Client(object):
     def add_resource(self, res):
         self._resources_list.append(res)
 
+    def get_root(self):
+        return self._root
+
     @staticmethod
     def from_url(url):
         return Client(root_url=url)
