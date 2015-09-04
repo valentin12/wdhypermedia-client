@@ -16,13 +16,13 @@ class Resource(object):
             self._client = client
         else:
             self._client = Client.from_resource(self)
-        self._resolved = False
+        self.fetched = False
         if doc is not None:
             self._doc = doc
-            self._resolved = True
+            self.fetched = True
         elif embed_doc is not None:
             self._doc = embed_doc
-            self._resolved = False
+            self.fetched = False
         self.uri = uri
         self.rel = rel
         self.title = title
@@ -35,13 +35,13 @@ class Resource(object):
             self.props.update(props)
 
     def __str__(self):
-        return "<{} _uri='{}', _resolved={}>".format(self.__class__.__name__, self.uri, self._resolved)
+        return "<{} rel='{}' uri='{}', fetched={}>".format(self.__class__.__name__, self.rel, self.uri, self.fetched)
 
     def __repr__(self):
         return "{} at {}>".format(str(self)[:-1], hex(id(self)))
 
     def _missing_property_handler(self, props, key):
-        if not self._resolved:
+        if not self.fetched:
             self.fetch()
         if key in props:
             return props[key]
@@ -132,13 +132,13 @@ class Resource(object):
 
         :param update: Fetch, even if the resource was already fetched
         """
-        if not self._resolved or update:
+        if not self.fetched or update:
             html_str = request.urlopen(self.uri).read()
             self._doc = html.fromstring(html_str)
             self.links = extract_links(self._client, self.uri, self._doc)
             self.forms.update(extract_forms(self._client, self._doc, self.uri))
             self.props.update(extract_props(self._doc, self.uri))
-            self._resolved = True
+            self.fetched = True
         return self
 
     def update(self):
@@ -157,7 +157,7 @@ class Resource(object):
         :param rels: List of relations as strings
         :return: ResourceList of the resources found
         """
-        if not self._resolved:
+        if not self.fetched:
             self.fetch()
         if rels[0] in self.links:
             if len(rels) > 1:

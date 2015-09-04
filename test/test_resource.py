@@ -15,7 +15,7 @@ articles = res.traverse([ARTICLES_REL])
 def test_res():
     assert res.uri == test_filepath
     assert res._doc is not None
-    assert res._resolved == True
+    assert res.fetched == True
 
 
 def test_parse():
@@ -28,6 +28,6 @@ def test_traverse():
     assert type(articles) is ResourceList
     assert len(articles) == 1
     assert type(articles[0]) is Resource
-    assert articles[0]._resolved == False
+    assert articles[0].fetched == False
     assert articles[0].rel == ARTICLES_REL
     assert articles[0].title == "articles"
