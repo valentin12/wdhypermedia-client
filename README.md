@@ -48,15 +48,16 @@ for article in articles:
 ```
 
 
-## More examples
+## More Examples
+
 
 ### Basics
 
-Starting point for an WDH-API is a root document, pointing to the different documents important for the client.
-The client is looking for the `rel` attribute of the anchor elements, to find it's way through the API, even if
+Starting point for an WDH API is a root document, pointing to the different documents important for the client.
+The client is looking for the `rel` attribute of the anchor elements, to find its way through the API, even if
 links change or other anchors are added. An example `index.html` could look like the following:
 
-A standard HTML document, which contains a self-reference in it's `<head>` as a `<link>` tag with `rel="self"`.
+A standard HTML document, which contains a self-reference in its `<head>` as a `<link>` tag with `rel="self"`.
 The body contains the list to the different documents: A list of articles, a list of authors and a search.
 
 ```html
@@ -106,9 +107,10 @@ print(author_list)
 # Out: <Resource rel='http://rels.example.org/authors' uri='/authors', fetched=False>
 ```
 
-### Parsing properties
 
-A resource document has multiple options to provide it's properties.
+### Parsing Properties
+
+A resource document has multiple options to provide its properties.
 
 #### `<dl><dt><dd></dd></dt></dl>`
 That construct is used to provide basic types like strings, numbers, booleans, timestamps
@@ -168,9 +170,11 @@ print(client.get_root().props)
 #  'website': [<wdhypermedia.Link at 0x7fe75c1d9240>]}
 ```
 
+
 #### (Embedded) Resources
+
 By looking for resources with a specific relation, the client can get resources related to him like
-properties, for example an article can list it's authors as a list of resources, not in a `<dl>` tag.
+properties, for example an article can list its authors as a list of resources, not in a `<dl>` tag.
 
 ```html
 <!DOCTYPE html>
