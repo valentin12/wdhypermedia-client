@@ -95,13 +95,16 @@ client = Client.from_html(html_str)
 print(client._resources)
 # Out:
 # {'/': <Resource rel='' uri='/', fetched=True at ...>,
-# '/authors': <Resource rel='http://rels.example.org/authors' uri='/authors', fetched=False at ...>,
-# '/articles': <Resource rel='http://rels.example.org/articles' uri='/articles', fetched=False at ...>,
-# '/search': <Resource rel='http://rels.example.org/search' uri='/search', fetched=False at ...>}
+# '/authors': <Resource rel='http://rels.example.org/authors' uri='/authors',
+#              fetched=False at ...>,
+# '/articles': <Resource rel='http://rels.example.org/articles' uri='/articles',
+#               fetched=False at ...>,
+# '/search': <Resource rel='http://rels.example.org/search' uri='/search',
+#             fetched=False at ...>}
 
-# accessing one of the resources (as said above, by relation)
-author_lists = client.traverse(["http://rels.example.org/authors"])  # returns a list of resources
-                                                                     # with rel=~
+# accessing one of the resources (as said above, by relation):
+# get a list of resources with rel=~
+author_lists = client.traverse(["http://rels.example.org/authors"])
 author_list = author_lists[0]
 print(author_list)
 # Out: <Resource rel='http://rels.example.org/authors' uri='/authors', fetched=False>
@@ -231,10 +234,10 @@ for author in authors:
 # Out:
 # <Resource rel='http://rels.example.org/author' uri='/authors/jdoe', fetched=False>
 # <Resource rel='http://rels.example.org/author' uri='/authors/janedoe', fetched=False>
-# Right now, they contain if embedded, some, like this, no information. To change this, you
-# could do author.fetch() to load the referenced document from the server or just try
-# author.props["someprop"]. If "someprop" isn't in author.props, the resource will (if it hasn't done so yet)
-# load the document, too.
+# Right now, they contain if embedded, some, like this, no information. To change this,
+# you could do author.fetch() to load the referenced document from the server or just
+# try author.props["someprop"]. If "someprop" isn't in author.props, the resource will
+# (if it hasn't done so yet) load the document, too.
 ```
 
 
